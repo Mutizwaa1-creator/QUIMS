@@ -1,4 +1,12 @@
 RewriteEngine On
+
+# Protect dashboard HTML files from direct access; serve them only through
+# their PHP entry points, which enforce the authenticated session and role.
+RewriteRule ^admin/index\.html$ admin/index.php [L,QSA]
+RewriteRule ^assistant/assistant-dashboard\.html$ assistant/assistant-dashboard.php [L,QSA]
+RewriteRule ^supervisor/supervisor-dashboard\.html$ supervisor/supervisor-dashboard.php [L,QSA]
+RewriteRule ^vsp/vsp\.html$ vsp/index.php [L,QSA]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 

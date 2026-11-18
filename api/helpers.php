@@ -1,8 +1,25 @@
 <?php
 /* API helpers: DB connection, session hardening, auth helpers */
 
-// set secure session cookie params before starting session
-if (session_status() === PHP_SESSION_NONE) {
+function startApplicationSession() {
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+
+    $tabSession = $_SERVER['HTTP_X_TAB_SESSION']
+        ?? $_GET['tab_session']
+        ?? $_POST['tab_session']
+        ?? '';
+    if ($tabSession !== '') {
+        if (!preg_match('/\A[A-Za-z0-9,-]{16,128}\z/', (string)$tabSession)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid tab session']);
+            exit;
+        }
+        ini_set('session.use_cookies', '0');
+        session_id((string)$tabSession);
+    }
+
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     $cookieParams = [
         'lifetime' => 0,
@@ -20,9 +37,23 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+startApplicationSession();
+
+// Keep page-bound tab session IDs from being sent to external resources.
+header('Referrer-Policy: no-referrer');
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+
+function appendTabSession($url) {
+    $tabSession = $_GET['tab_session'] ?? '';
+    if ($tabSession === '') {
+        return $url;
+    }
+    return $url . (strpos($url, '?') === false ? '?' : '&')
+        . 'tab_session=' . rawurlencode((string)$tabSession);
+}
 
 $host = '127.0.0.1';
 $dbname   = 'iecms';

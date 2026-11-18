@@ -5,6 +5,21 @@ function normalizeSignerName($name) {
     return strtolower((string)preg_replace('/\s+/', ' ', trim((string)$name)));
 }
 
+function isAssistantAccount(PDO $db, $name, $email = '') {
+    $stmt = $db->prepare(
+        "SELECT 1
+         FROM users
+         WHERE LOWER(TRIM(role)) = 'assistant'
+           AND (
+               LOWER(TRIM(full_name)) = LOWER(TRIM(?))
+               OR (? <> '' AND LOWER(TRIM(email)) = LOWER(TRIM(?)))
+           )
+         LIMIT 1"
+    );
+    $stmt->execute([$name, $email, $email]);
+    return (bool)$stmt->fetchColumn();
+}
+
 function ensurePasskeyStorageSchema(PDO $db) {
     $stmt = $db->query(
         "SELECT COLUMN_NAME, IS_NULLABLE
@@ -48,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         try {
             $stmt = $db->prepare(
-                "SELECT full_name, (passkey_hash IS NOT NULL AND passkey_hash <> '') AS passkey_present
+                "SELECT full_name, email, (passkey_hash IS NOT NULL AND passkey_hash <> '') AS passkey_present
                  FROM general_users
                  WHERE LOWER(TRIM(full_name)) = LOWER(TRIM(?))
                  ORDER BY passkey_present DESC, id ASC
@@ -56,6 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $stmt->execute([$name]);
             $signer = $stmt->fetch();
+            if ($signer && isAssistantAccount($db, $signer['full_name'], $signer['email'] ?? '')) {
+                http_response_code(403);
+                sendJson(['error' => 'Assistant accounts cannot be used as representative signatures. Use a General User account.']);
+            }
         } catch (PDOException $e) {
             error_log('Passkey signer lookup failed: ' . $e->getMessage());
             http_response_code(500);
@@ -74,14 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendJson(['error' => 'Name and passkey are required']);
         }
         $stmt = $db->prepare(
-            "SELECT full_name, passkey_hash
+            "SELECT full_name, email, passkey_hash
              FROM general_users
              WHERE LOWER(TRIM(full_name)) = LOWER(TRIM(?))
                AND passkey_hash IS NOT NULL AND passkey_hash <> ''
              ORDER BY id ASC"
         );
-        $stmt->execute([$name]);
-        $signers = $stmt->fetchAll();
+        try {
+            $stmt->execute([$name]);
+            $signers = $stmt->fetchAll();
+            foreach ($signers as $signer) {
+                if (isAssistantAccount($db, $signer['full_name'], $signer['email'] ?? '')) {
+                    http_response_code(403);
+                    sendJson(['error' => 'Assistant accounts cannot be used as representative signatures. Use a General User account.']);
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('Passkey signer verification failed: ' . $e->getMessage());
+            http_response_code(500);
+            sendJson(['error' => 'Signature verification is unavailable. Please try again or contact an administrator.']);
+        }
         $verifiedSigner = null;
         foreach ($signers as $signer) {
             $storedPasskey = (string)$signer['passkey_hash'];

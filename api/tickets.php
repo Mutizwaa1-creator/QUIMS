@@ -187,8 +187,14 @@ try {
             $updates['status'] = $statusLabels[$statusKey];
         }
         $submittedUpdateFields = array_keys($updates);
-        if (strtolower((string)($updates['status'] ?? '')) === 'resolved' && empty($updates['resolvedDate'])) {
-            $updates['resolvedDate'] = date('Y-m-d H:i:s');
+        if (array_key_exists('status', $updates)) {
+            if ($updates['status'] === 'Resolved') {
+                if (empty($updates['resolvedDate'])) {
+                    $updates['resolvedDate'] = date('Y-m-d H:i:s');
+                }
+            } else {
+                $updates['resolvedDate'] = null;
+            }
         }
         $allowed = ['assignedDate', 'resolvedDate', 'type', 'category', 'description', 'assignee', 'status', 'external', 'externalCause', 'adminConstraint', 'quantity', 'staffDetails'];
         if (!$id || !$updates) {
@@ -204,12 +210,32 @@ try {
         if (array_key_exists('assignee', $updates) && !$selfAssignment) {
             validateAssignmentTarget($updates['assignee']);
         }
-        $oldStmt = $db->prepare('SELECT assignee, status FROM tickets WHERE id = ? LIMIT 1');
+        $oldStmt = $db->prepare('SELECT assignee, status, description FROM tickets WHERE id = ? LIMIT 1');
         $oldStmt->execute([$id]);
         $oldTicket = $oldStmt->fetch();
         if (!$oldTicket) {
             http_response_code(404);
             sendJson(['error' => 'Ticket not found']);
+        }
+        if (
+            strtolower(trim((string)($oldTicket['status'] ?? ''))) === 'resolved'
+            && array_key_exists('description', $updates)
+            && (string)$updates['description'] !== (string)($oldTicket['description'] ?? '')
+        ) {
+            http_response_code(409);
+            sendJson(['error' => 'Resolved task descriptions cannot be changed']);
+        }
+        if (array_key_exists('status', $updates)) {
+            $statusRank = ['pending' => 0, 'in progress' => 1, 'resolved' => 2];
+            $oldStatusKey = strtolower(trim((string)($oldTicket['status'] ?? 'Pending')));
+            if (!array_key_exists($oldStatusKey, $statusRank)) {
+                $oldStatusKey = 'pending';
+            }
+            $newStatusKey = strtolower(trim((string)$updates['status']));
+            if ($statusRank[$newStatusKey] < $statusRank[$oldStatusKey]) {
+                http_response_code(409);
+                sendJson(['error' => 'Ticket status cannot move backwards']);
+            }
         }
         $isNewSelfAssignment = $selfAssignment
             && (string)($oldTicket['assignee'] ?? '') !== (string)$actorAssistant['id'];
@@ -253,22 +279,6 @@ try {
                 }
             }
         }
-        $statusRank = ['pending' => 0, 'in progress' => 1, 'resolved' => 2];
-        if (array_key_exists('status', $updates)) {
-            $oldStatusKey = strtolower(trim((string)($oldTicket['status'] ?? 'Pending')));
-            if (!in_array($oldStatusKey, ['pending', 'in progress', 'resolved'], true)) {
-                $oldStatusKey = 'pending';
-            }
-            $newStatusKey = strtolower(trim((string)$updates['status']));
-            if (!array_key_exists($newStatusKey, $statusRank)) {
-                http_response_code(400);
-                sendJson(['error' => 'Ticket status must be Pending, In Progress, or Resolved']);
-            }
-            if (($statusRank[$newStatusKey] ?? 0) < ($statusRank[$oldStatusKey] ?? 0)) {
-                http_response_code(409);
-                sendJson(['error' => 'Ticket status cannot move backwards']);
-            }
-        }
         if (currentRole() === 'supervisor') {
             $actorAssistant = getAssistantForUser($_SESSION['user_id']);
             $ownsTicket = $actorAssistant && $oldTicket && (int)$oldTicket['assignee'] === (int)$actorAssistant['id'];
@@ -277,7 +287,8 @@ try {
                 sendJson(['error' => 'Supervisors can only update their own assignments']);
             }
         }
-        if ($hasEditAudit) {
+        $hasContentEdit = count(array_diff($submittedUpdateFields, ['status'])) > 0;
+        if ($hasEditAudit && $hasContentEdit) {
             $sets[] = '`edited_by` = ?';
             $sets[] = '`edited_at` = ?';
             $values[] = currentUserDisplayName();

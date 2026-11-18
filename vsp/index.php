@@ -5,16 +5,16 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 if (empty($_SESSION['user_id'])) {
-    header('Location: ../index.html?returnTo=' . rawurlencode('vsp/index.php'));
+    header('Location: ' . appendTabSession('../index.html?returnTo=' . rawurlencode('vsp/index.php')));
     exit;
 }
 
 $role = currentRole();
 if (!in_array($role, ['admin', 'supervisor', 'assistant'], true)) {
     if (($_SESSION['user_type'] ?? '') === 'general') {
-        header('Location: ../user-dashboard.php');
+        header('Location: ' . appendTabSession('../user-dashboard.php'));
     } else {
-        header('Location: ../index.html');
+        header('Location: ' . appendTabSession('../index.html'));
     }
     exit;
 }
@@ -57,12 +57,10 @@ $stylesheetFile = $role === 'assistant' ? 'style.css' : 'styles.css';
                 </div>
             </div>
             <div class="header-right">
-                <a class="btn btn-outline" href="<?= htmlspecialchars($dashboardFile, ENT_QUOTES, 'UTF-8') ?>">Back to Dashboard</a>
                 <div class="profile-header">
                     <div class="profile-avatar"></div>
                     <div class="profile-info">
                         <span class="profile-name"></span>
-                        <span class="profile-role"></span>
                     </div>
                 </div>
             </div>
@@ -75,6 +73,7 @@ $stylesheetFile = $role === 'assistant' ? 'style.css' : 'styles.css';
         </div>
     </main>
 
+    <script src="../tab-session.js?v=20261103-tab-sessions"></script>
     <script src="app-core.js?v=20261008-vsp-1"></script>
     <script>
         state.activeTab = 'register';

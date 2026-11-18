@@ -8,6 +8,7 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="lucide.js"></script>
+    <script src="tab-session.js?v=20261103-tab-sessions"></script>
 
     <style>
         * {
@@ -17,20 +18,12 @@
         }
         
          :root {
-            --bg: #ffffff;
+            --bg: #f8fafc;
             --card: #ffffff;
             --text: #0f172a;
             --muted: #64748b;
             --border: #cbd5e1;
             --accent: #0f766e;
-        }
-        
-        body.dark {
-            --bg: #020617;
-            --card: #020617;
-            --text: #e5e7eb;
-            --muted: #94a3b8;
-            --border: #1e293b;
         }
         
         body {
@@ -43,17 +36,31 @@
             min-height: 100vh;
             min-height: 100dvh;
             overflow-x: hidden;
-            transition: background .3s, color .3s;
+            transition: color .3s;
         }
-        
-        #bgCanvas {
+
+        body::before {
+            content: "";
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
+            inset: 0;
+            z-index: 0;
             pointer-events: none;
+            background: url("background.jpg") center / min(38vmin, 420px) no-repeat;
+            opacity: .06;
+        }
+
+        .login-footer {
+            position: fixed;
+            right: 16px;
+            bottom: 12px;
+            left: 16px;
+            color: #047857;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: .04em;
+            text-align: center;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, .8);
+            z-index: 20;
         }
         
         .login-wrapper {
@@ -71,15 +78,14 @@
         }
         
         .login-card {
-            background: linear-gradient(135deg, #064e3b, #0f766e, #a16207);
+            background: var(--card);
             border-radius: 18px;
-            padding: 2px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 24px 60px -24px rgba(15, 23, 42, .35), 0 0 0 1px rgba(148, 163, 184, .16);
         }
         
         .login-inner {
             background: var(--card);
-            border-radius: 16px;
+            border-radius: inherit;
             padding: 36px 32px 40px;
             display: flex;
             flex-direction: column;
@@ -123,6 +129,7 @@
             font-weight: 600;
             margin-bottom: 6px;
             color: var(--text);
+            text-shadow: 0 1px 3px rgba(255, 255, 255, .9);
         }
         
         .input-wrapper {
@@ -135,7 +142,7 @@
             padding: 14px 44px 14px 40px;
             border-radius: 10px;
             border: 1px solid var(--border);
-            background: transparent;
+            background: rgba(255, 255, 255, .92);
             color: var(--text);
             font-size: 14px;
             font-family: 'Inter', sans-serif;
@@ -383,32 +390,6 @@
             border-color: #059669;
         }
         
-        .toggle-theme {
-            position: fixed;
-            top: 16px;
-            right: 16px;
-            cursor: pointer;
-            z-index: 1000;
-            padding: 8px;
-            background: var(--card);
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            color: var(--text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background .2s, border-color .2s;
-        }
-        
-        .toggle-theme:hover {
-            border-color: var(--accent);
-        }
-        
-        .toggle-theme:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
-        
         a.forgot {
             font-size: 13px;
             color: #34d399;
@@ -457,11 +438,6 @@
             }
             .welcome-text {
                 font-size: 22px;
-            }
-            .toggle-theme {
-                top: 10px;
-                right: 10px;
-                padding: 6px;
             }
         }
         
@@ -528,12 +504,7 @@
     </style>
 </head>
 
-<body class="dark">
-
-    <canvas id="bgCanvas"></canvas>
-    <button class="toggle-theme" id="themeBtn" aria-label="Toggle theme">
-  <i data-lucide="sun"></i>
-</button>
+<body>
 
     <div id="successOverlay">
         <div class="welcome-card">
@@ -561,18 +532,18 @@
                     <img src="system logo (2).webp" alt="QUIMS Logo" id="logoImg" onerror="this.style.display='none'" />
                 </div>
                 <h2>Secure Portal</h2>
-                <p class="subtitle">Enter your credentials to continue</p>
+                <p class="subtitle">Use your email and password, or National ID and passkey</p>
                 <div class="alert-msg error" id="alertMsg" role="alert" aria-live="polite"></div>
                 <form id="loginForm" method="POST" action="login.php">
                     <div class="field">
-                        <label for="identifier">Email address</label>
+                        <label for="identifier">Email address or National ID</label>
                         <div class="input-wrapper">
                             <i data-lucide="user" class="input-icon"></i>
-                            <input type="text" name="identifier" id="identifier" required placeholder="name@company.com" autocomplete="username">
+                            <input type="text" name="identifier" id="identifier" required placeholder="Email or National ID" autocomplete="username">
                         </div>
                     </div>
                     <div class="field">
-                        <label for="password">Password</label>
+                        <label for="password">Password or passkey</label>
                         <div class="input-wrapper">
                             <i data-lucide="lock" class="input-icon"></i>
                             <input type="password" id="password" name="password" required placeholder="••••••••" autocomplete="current-password">
@@ -594,20 +565,10 @@
             </div>
         </div>
     </div>
+    <footer class="login-footer">Powered by Kundatech</footer>
 
     <script>
         lucide.createIcons();
-
-        /* ── Theme Toggle ── */
-        const themeBtn = document.getElementById('themeBtn');
-        themeBtn.addEventListener('click', () => {
-            document.body.classList.toggle('dark');
-            const isDark = document.body.classList.contains('dark');
-            themeBtn.innerHTML = isDark ?
-                '<i data-lucide="sun"></i>' :
-                '<i data-lucide="moon"></i>';
-            lucide.createIcons();
-        });
 
         /* ── Password Toggle (no lucide dependency) ── */
         const pwd = document.getElementById('password');
@@ -705,12 +666,18 @@
                     return;
                 }
 
+                if (!data.tabSession) {
+                    alertMsg.innerText = 'Login succeeded but the server did not start a tab session. Please try again.';
+                    alertMsg.style.display = 'block';
+                    return;
+                }
+                window.IECMSTabSession.store(data.tabSession);
                 sessionStorage.setItem(redirectFlagKey, '1');
                 welcomeUser.innerText = data.greeting || 'Welcome Back!';
                 loginWrapper.classList.add('fade-out');
                 successOverlay.style.display = 'flex';
                 setTimeout(() => {
-                    window.location.href = data.redirect;
+                    window.location.href = window.IECMSTabSession.withToken(data.redirect);
                 }, 900);
 
             } catch (err) {
@@ -723,111 +690,19 @@
         /* ── Logout Guard ── */
         const logoutOverlay = document.getElementById('logoutOverlay');
 
-        function confirmLogout(answer) {
+        async function confirmLogout(answer) {
             logoutOverlay.style.display = 'none';
-            if (answer) window.location.replace('logout.php');
-        }
-
-        /* ── Background Particles ── */
-        const canvas = document.getElementById('bgCanvas');
-        const ctx = canvas.getContext('2d');
-        let particles = [];
-        let mouse = {
-            x: null,
-            y: null
-        };
-
-        function getParticleCount() {
-            const w = window.innerWidth;
-            if (w < 480) return 30;
-            if (w < 768) return 50;
-            return 80;
-        }
-
-        function initCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            particles = [];
-            const count = getParticleCount();
-            for (let i = 0; i < count; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    radius: Math.random() * 2 + 1
-                });
+            if (!answer) return;
+            try {
+                await fetch('api/logout.php', { method: 'POST', credentials: 'include', cache: 'no-store' });
+            } catch (error) {
+                console.error('Logout request failed:', error);
+            } finally {
+                window.IECMSTabSession.clear();
+                window.location.replace('index.html');
             }
         }
 
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const color = document.body.classList.contains('dark') ? '45,212,191' : '15,118,110';
-            const linkDist = window.innerWidth < 480 ? 100 : 140;
-
-            particles.forEach(p => {
-                p.x += p.vx;
-                p.y += p.vy;
-                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(' + color + ',0.3)';
-                ctx.fill();
-            });
-
-            for (let i = 0; i < particles.length; i++) {
-                for (let j = i + 1; j < particles.length; j++) {
-                    const dx = particles[i].x - particles[j].x;
-                    const dy = particles[i].y - particles[j].y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < linkDist) {
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.strokeStyle = 'rgba(' + color + ',' + ((1 - dist / linkDist) * 0.2) + ')';
-                        ctx.stroke();
-                    }
-                }
-                if (mouse.x !== null && mouse.y !== null) {
-                    const dxm = particles[i].x - mouse.x;
-                    const dym = particles[i].y - mouse.y;
-                    const distM = Math.sqrt(dxm * dxm + dym * dym);
-                    if (distM < 120) {
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(mouse.x, mouse.y);
-                        ctx.strokeStyle = 'rgba(' + color + ',' + ((1 - distM / 120) * 0.25) + ')';
-                        ctx.stroke();
-                    }
-                }
-            }
-            requestAnimationFrame(animate);
-        }
-
-        canvas.addEventListener('mousemove', e => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-        });
-        canvas.addEventListener('mouseleave', () => {
-            mouse.x = null;
-            mouse.y = null;
-        });
-        canvas.addEventListener('touchmove', e => {
-            if (e.touches.length > 0) {
-                mouse.x = e.touches[0].clientX;
-                mouse.y = e.touches[0].clientY;
-            }
-        }, {
-            passive: true
-        });
-        canvas.addEventListener('touchend', () => {
-            mouse.x = null;
-            mouse.y = null;
-        });
-        window.addEventListener('resize', initCanvas);
-        initCanvas();
-        animate();
     </script>
 </body>
 

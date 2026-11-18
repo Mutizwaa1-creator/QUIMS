@@ -8,13 +8,13 @@ requireAuth();
 $role = currentRole();
 if ($role !== 'supervisor') {
 	if ($role === 'admin') {
-		header('Location: ../admin/index.php');
+		header('Location: ' . appendTabSession('../admin/index.php'));
 	} elseif ($role === 'assistant') {
-		header('Location: ../assistant/assistant-dashboard.php');
+		header('Location: ' . appendTabSession('../assistant/assistant-dashboard.php'));
 	} elseif (($_SESSION['user_type'] ?? '') === 'general') {
-		header('Location: ../user-dashboard.php');
+		header('Location: ' . appendTabSession('../user-dashboard.php'));
 	} else {
-		header('Location: ../index.html');
+		header('Location: ' . appendTabSession('../index.html'));
 	}
 	exit;
 }

@@ -107,11 +107,10 @@ function renderAssignments(container) {
         </div>`}
         <div style="display:flex;flex-wrap:wrap;gap:7px;border-top:1px solid var(--slate-100);padding-top:12px;">
           ${['Pending', 'In Progress', 'Resolved'].map(status => {
-            const ranks = { pending: 1, 'in progress': 2, resolved: 3 };
-            const currentRank = ranks[currentStatus.toLowerCase()] || 1;
-            const targetRank = ranks[status.toLowerCase()];
             const isCurrent = currentStatus.toLowerCase() === status.toLowerCase();
-            return `<button type="button" class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline'}" onclick="updateAssignmentStatus('${esc(t.id)}', '${status}')" ${isCurrent || targetRank < currentRank ? 'disabled' : ''}>${status}</button>`;
+            const ranks = { pending: 0, 'in progress': 1, resolved: 2 };
+            const isBackward = ranks[status.toLowerCase()] < ranks[currentStatus.toLowerCase()];
+            return `<button type="button" class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline'}" onclick="updateAssignmentStatus('${esc(t.id)}', '${status}')" ${isCurrent || isBackward ? 'disabled' : ''}>${status}</button>`;
           }).join('')}
         </div>
         ${isAssistant ? '' : `<div style="display:flex;gap:8px;">
@@ -238,9 +237,12 @@ async function generateAssignmentTicketAi() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.error) throw new Error(data.error || 'AI request failed');
-      result.textContent = data.text || 'No answer was returned.';
+      if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('AI returned an empty response.');
+      result.textContent = data.text.trim();
+      addToast('QUIMS response generated successfully.');
     } catch (error) {
-      result.textContent = error.message || 'Unable to generate an answer.';
+      console.error('Assignment AI response failed:', error);
+      result.textContent = 'Sorry, no QUIMS response was generated. Please try again.';
       addToast(result.textContent, 'error');
   }
 }
@@ -890,9 +892,9 @@ function renderRegister(container) {
               <i data-lucide="sparkles" style="width:18px;height:18px"></i>
             </button>
           </div>
-          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:var(--slate-50);white-space:pre-wrap">
+          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:#fff;white-space:pre-wrap">
             <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
-              <img src="../background.jpg" alt="Judicial Service Commission logo" style="width:96px;height:96px;object-fit:contain">
+              <img src="../background.jpg" alt="Judicial Service Commission logo" style="display:block;width:96px;height:96px;object-fit:contain;border:0;outline:0;box-shadow:none;background:#fff">
               <strong>QUIMS HELPDESK</strong>
             </div>
             <div id="reg-ai-suggestion-text" class="ai-response-scroll" style="margin-top:6px"></div>
@@ -1116,20 +1118,20 @@ async function handleAIGenerate() {
       throw new Error(data.error);
     }
 
-    if (data.text) {
+    if (typeof data.text === 'string' && data.text.trim()) {
       if (markerIndex >= 0) desc.value = originalPrompt;
       const suggestion = document.getElementById('reg-ai-suggestion');
       const suggestionText = document.getElementById('reg-ai-suggestion-text');
       if (!suggestion || !suggestionText) throw new Error('AI suggestion area is unavailable.');
       suggestionText.textContent = data.text.trim();
       suggestion.classList.remove('hidden');
-      addToast('AI suggestion generated for reference; it is not included in the record.');
+      addToast('QUIMS response generated successfully.');
     } else {
       throw new Error("Empty response received from server");
     }
   } catch (error) {
     console.error('Gemini Generate Error:', error);
-    addToast(error.message || 'Could not fetch AI suggestion.', 'error');
+    addToast('Sorry, no QUIMS response was generated. Please try again.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="sparkles" style="width:18px;height:18px"></i>';
@@ -1173,9 +1175,12 @@ async function runAssignmentAi() {
     });
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || 'AI request failed');
-    result.textContent = data.text || 'No solution was returned.';
+    if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('AI returned an empty response.');
+    result.textContent = data.text.trim();
+    addToast('QUIMS response generated successfully.');
   } catch (error) {
-    result.textContent = error.message || 'Unable to search for a solution.';
+    console.error('Assignment AI search failed:', error);
+    result.textContent = 'Sorry, no QUIMS response was generated. Please try again.';
     addToast(result.textContent, 'error');
   }
 }
@@ -2293,8 +2298,11 @@ function openEditTicketModal(id) {
   }
   const t = state.tickets.find(x => x.id === id);
   if (!t) return;
+  const isResolved = String(t.status || '').toLowerCase() === 'resolved';
   const editStatuses = ['Pending', 'In Progress', 'Resolved'];
   const editStatus = editStatuses.includes(t.status) ? t.status : 'Pending';
+  const statusRank = { Pending: 0, 'In Progress': 1, Resolved: 2 };
+  const currentStatusRank = statusRank[editStatus];
   const body = `
     <form id="edit-form" onsubmit="handleEditTicketSubmit(event, '${id}')" class="space-y-4">
       <div class="form-grid-2">
@@ -2306,14 +2314,14 @@ function openEditTicketModal(id) {
         </div>
         <div class="form-group"><label class="form-label">Status</label>
           <select class="form-select form-select-sm" id="edit-status">
-          ${editStatuses.map(s => `<option value="${s}" ${editStatus === s ? 'selected' : ''}>${s}</option>`).join('')}
+          ${editStatuses.map(s => `<option value="${s}" ${editStatus === s ? 'selected' : ''} ${statusRank[s] < currentStatusRank ? 'disabled' : ''}>${s}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2">${esc(t.description)}</textarea></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2" ${isResolved ? 'disabled' : ''}>${esc(t.description)}</textarea></div>
       <div class="form-group"><label class="form-label">External Info</label><input class="form-input form-input-sm" id="edit-external" value="${esc(t.external || '')}"></div>
       <div class="form-grid-2">
-        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${t.resolvedDate || ''}"></div>
+        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${esc(String(t.resolvedDate || '').slice(0, 10))}"></div>
         <div class="form-group"><label class="form-label">Date Raised</label><input type="date" class="form-input form-input-sm" value="${t.date}" readonly style="background:var(--slate-100)"></div>
       </div>
     </form>
@@ -2326,13 +2334,14 @@ function openEditTicketModal(id) {
 
 async function handleEditTicketSubmit(e, id) {
   e.preventDefault();
+  const descriptionField = document.getElementById('edit-desc');
   const updates = {
     assignee: document.getElementById('edit-assignee').value ? parseInt(document.getElementById('edit-assignee').value) : null,
     status: document.getElementById('edit-status').value,
-    description: document.getElementById('edit-desc').value,
     external: document.getElementById('edit-external').value || null,
     resolvedDate: document.getElementById('edit-resolved-date').value || null
   };
+  if (!descriptionField.disabled) updates.description = descriptionField.value;
   await editTicket(id, updates);
   closeModal();
 }
@@ -2833,6 +2842,14 @@ function handleNotifFilterChange(key, value) {
 function renderSettings(container) {
   if (String(state.currentUserRole || '').toLowerCase() === 'assistant') {
     const user = state.currentUser || {};
+    const userName = String(user.full_name || user.name || state.currentUserName || '').trim();
+    const normalizedUserName = userName.toLowerCase();
+    const hasOwnPasskey = Boolean(normalizedUserName && (state.passkeys || []).some(passkey =>
+      String(passkey.full_name || '').trim().toLowerCase() === normalizedUserName
+    ));
+    const passkeyStatus = !state.passkeysFetched
+      ? 'Checking...'
+      : (hasOwnPasskey ? 'Registered' : 'Not registered');
     container.innerHTML = `
       <div class="max-w-5xl pb-12 space-y-6" style="animation:fadeIn .3s ease-out;">
         <div class="notif-page-header" style="border-left:4px solid var(--slate-600);margin-bottom:24px;">
@@ -2849,9 +2866,14 @@ function renderSettings(container) {
           <div><small>Role</small><span>Assistant</span></div>
           <div><small>Phone</small><span>${esc(user.phone || '-')}</span></div>
           <div><small>Account status</small><span>${esc(user.status || '-')}</span></div>
+          <div><small>Signature passkey</small><span>${passkeyStatus}</span></div>
           <div style="grid-column:1/-1;padding-top:12px;">
             <button type="button" class="btn btn-primary" onclick="openProfileModal()"><i data-lucide="user-round-cog" style="width:16px;height:16px"></i> Profile &amp; Password</button>
-            <button type="button" class="btn btn-outline" onclick="resetOwnPasskey()" style="margin-left:8px;"><i data-lucide="key-round" style="width:16px;height:16px"></i> Reset My Passkey</button>
+            ${state.passkeysFetched && hasOwnPasskey
+              ? '<button type="button" class="btn btn-outline" onclick="resetOwnPasskey()" style="margin-left:8px;"><i data-lucide="key-round" style="width:16px;height:16px"></i> Reset My Passkey</button>'
+              : (state.passkeysFetched
+                ? '<button type="button" class="btn btn-outline" onclick="openFTUModal()" style="margin-left:8px;"><i data-lucide="key-round" style="width:16px;height:16px"></i> Create Passkey</button>'
+                : '')}
           </div>
         </section>
       </div>`;
@@ -3178,6 +3200,7 @@ async function resetOwnPasskey() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Unable to reset your passkey');
     await loadPasskeys();
+    renderContent();
     showToast(data.message || 'Your signature passkey was reset.', 'success');
   } catch (error) {
     showToast(error.message || 'Unable to reset your passkey. Contact an administrator.', 'error');

@@ -861,9 +861,9 @@ function renderRegister(container) {
               <i data-lucide="sparkles" style="width:18px;height:18px"></i>
             </button>
           </div>
-          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:var(--slate-50);white-space:pre-wrap">
+          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:#fff;white-space:pre-wrap">
             <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
-              <img src="../background.jpg" alt="Judicial Service Commission logo" style="width:96px;height:96px;object-fit:contain">
+              <img src="../background.jpg" alt="Judicial Service Commission logo" style="display:block;width:96px;height:96px;object-fit:contain;border:0;outline:0;box-shadow:none;background:#fff">
               <strong>QUIMS HELPDESK</strong>
             </div>
             <div id="reg-ai-suggestion-text" class="ai-response-scroll" style="margin-top:6px"></div>
@@ -1077,20 +1077,20 @@ async function handleAIGenerate() {
       throw new Error(data.error);
     }
 
-    if (data.text) {
+    if (typeof data.text === 'string' && data.text.trim()) {
       if (markerIndex >= 0) desc.value = originalPrompt;
       const suggestion = document.getElementById('reg-ai-suggestion');
       const suggestionText = document.getElementById('reg-ai-suggestion-text');
       if (!suggestion || !suggestionText) throw new Error('AI suggestion area is unavailable.');
       suggestionText.textContent = data.text.trim();
       suggestion.classList.remove('hidden');
-      addToast('AI suggestion generated for reference; it is not included in the record.');
+      addToast('QUIMS response generated successfully.');
     } else {
       throw new Error("Empty response received from server");
     }
   } catch (error) {
     console.error('Gemini Generate Error:', error);
-    addToast(error.message || 'Could not fetch AI suggestion.', 'error');
+    addToast('Sorry, no QUIMS response was generated. Please try again.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="sparkles" style="width:18px;height:18px"></i>';
@@ -2267,6 +2267,9 @@ async function deleteTicket(id) {
 function openEditTicketModal(id) {
   const t = state.tickets.find(x => x.id === id);
   if (!t) return;
+  const isResolved = String(t.status || '').toLowerCase() === 'resolved';
+  const statusRank = { Pending: 0, 'In Progress': 1, Resolved: 2 };
+  const currentStatusRank = statusRank[t.status] ?? 0;
   const body = `
     <form id="edit-form" onsubmit="handleEditTicketSubmit(event, '${id}')" class="space-y-4">
       <div class="form-grid-2">
@@ -2278,14 +2281,14 @@ function openEditTicketModal(id) {
         </div>
         <div class="form-group"><label class="form-label">Status</label>
           <select class="form-select form-select-sm" id="edit-status">
-            ${['Pending', 'In Progress', 'Resolved'].map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+            ${['Pending', 'In Progress', 'Resolved'].map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''} ${statusRank[s] < currentStatusRank ? 'disabled' : ''}>${s}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2">${esc(t.description)}</textarea></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2" ${isResolved ? 'disabled' : ''}>${esc(t.description)}</textarea></div>
       <div class="form-group"><label class="form-label">External Info</label><input class="form-input form-input-sm" id="edit-external" value="${esc(t.external || '')}"></div>
       <div class="form-grid-2">
-        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${t.resolvedDate || ''}"></div>
+        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${esc(String(t.resolvedDate || '').slice(0, 10))}"></div>
         <div class="form-group"><label class="form-label">Date Raised</label><input type="date" class="form-input form-input-sm" value="${t.date}" readonly style="background:var(--slate-100)"></div>
       </div>
     </form>
@@ -2298,13 +2301,14 @@ function openEditTicketModal(id) {
 
 async function handleEditTicketSubmit(e, id) {
   e.preventDefault();
+  const descriptionField = document.getElementById('edit-desc');
   const updates = {
     assignee: document.getElementById('edit-assignee').value ? parseInt(document.getElementById('edit-assignee').value) : null,
     status: document.getElementById('edit-status').value,
-    description: document.getElementById('edit-desc').value,
     external: document.getElementById('edit-external').value || null,
     resolvedDate: document.getElementById('edit-resolved-date').value || null
   };
+  if (!descriptionField.disabled) updates.description = descriptionField.value;
   await editTicket(id, updates);
   closeModal();
 }
@@ -2798,11 +2802,40 @@ function handleNotifFilterChange(key, value) {
 
 /* ===== SETTINGS VIEW ===== */
 function renderSettings(container) {
+  const currentUser = state.currentUser || {};
+  const currentUserName = String(currentUser.full_name || currentUser.name || state.currentUserName || '').trim();
+  const normalizedCurrentUserName = currentUserName.toLowerCase();
+  const hasOwnPasskey = Boolean(normalizedCurrentUserName && (state.passkeys || []).some(passkey =>
+    String(passkey.full_name || '').trim().toLowerCase() === normalizedCurrentUserName
+  ));
+
   if (!state.settingsTargetType) {
     state.settingsTargetType = 'user'; // 'user' or 'assistant'
   }
   if (state.settingsTargetType === 'user') {
-    renderGeneralUserNationalIdLookup(container, true);
+    renderGeneralUserNationalIdLookup(container, true, `
+      <section style="background:white;border:1px solid var(--slate-200);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;" aria-label="Biometric and passkey reset">
+        <div style="border-bottom:1px solid var(--slate-100);padding:18px 24px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="fingerprint" style="width:18px;height:18px;color:var(--slate-600)"></i>
+          <h3 style="font-size:1rem;font-weight:700;color:var(--slate-800);margin:0;">Biometric &amp; Passkey Reset</h3>
+        </div>
+        <div style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+          <p style="font-size:13px;color:var(--slate-500);margin:0;line-height:1.5;">Manage your signature passkey here. Your passkey is stored securely and cannot be displayed.</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--slate-50);border:1px solid var(--slate-200);border-radius:8px;padding:16px 20px;flex-wrap:wrap;gap:16px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <i data-lucide="key-round" style="width:20px;height:20px;color:var(--slate-600)"></i>
+              <div>
+                <div style="font-weight:700;font-size:13.5px;color:var(--slate-800);">Your signature passkey</div>
+                <div style="font-size:12px;color:var(--slate-500);margin-top:1px;">${!state.passkeysFetched ? 'Checking passkey status...' : (hasOwnPasskey ? 'Passkey is registered.' : 'No passkey is registered.')}</div>
+              </div>
+            </div>
+            ${state.passkeysFetched && !hasOwnPasskey
+              ? '<button type="button" onclick="openFTUModal()" class="btn btn-primary" style="display:flex;align-items:center;gap:8px;"><i data-lucide="key-round" style="width:16px;height:16px"></i> Create Passkey</button>'
+              : ''}
+          </div>
+        </div>
+      </section>
+    `);
     return;
   }
   
@@ -2834,6 +2867,11 @@ function renderSettings(container) {
       : (selectedItem.full_name || selectedItem.name || selectedItem.email || ''))
     : '';
   const currentEmail = selectedItem ? selectedItem.email : '';
+  const isCurrentAccount = Boolean(
+    currentUser.email
+    && selectedItem?.email
+    && String(currentUser.email).trim().toLowerCase() === String(selectedItem.email).trim().toLowerCase()
+  );
 
   container.innerHTML = `
     <div class="max-w-5xl pb-12 space-y-8" style="animation: fadeIn 0.3s ease-out;">
@@ -2988,9 +3026,13 @@ function renderSettings(container) {
                   <button onclick="submitPasskeyReset()" class="btn" style="background: var(--red-600); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
                     <i data-lucide="trash-2" style="width:16px;height:16px"></i> Reset Passkey
                   </button>
+                ` : (isCurrentAccount && state.passkeysFetched ? `
+                  <button type="button" onclick="openFTUModal()" class="btn btn-primary" style="display:flex;align-items:center;gap:8px;">
+                    <i data-lucide="key-round" style="width:16px;height:16px"></i> Create Passkey
+                  </button>
                 ` : `
                   <div role="alert" style="padding:10px 14px;border:1px solid var(--amber-200);border-radius:8px;background:var(--amber-50);color:var(--amber-800);font-size:13px;">No passkey is registered. Register a passkey first, then you can reset it here.</div>
-                `}
+                `)}
               </div>
             </div>
           </div>
@@ -3066,7 +3108,7 @@ function renderSettings(container) {
   `;
 }
 
-function renderGeneralUserNationalIdLookup(container, canReset) {
+function renderGeneralUserNationalIdLookup(container, canReset, ownPasskeyPanel = '') {
   const user = state.generalUserLookupResult;
   const fields = user ? [
     ['Account ID', user.id],
@@ -3092,6 +3134,7 @@ function renderGeneralUserNationalIdLookup(container, canReset) {
           <p class="notif-page-subtitle" style="font-size:.9rem;color:var(--slate-500);margin:0;">Verify the National ID to view or manage the matching General User account.</p>
         </div></div>
       </div>
+      ${ownPasskeyPanel}
       <section style="background:white;border:1px solid var(--slate-200);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px;">
         <div style="display:flex;justify-content:flex-end;">
           <button type="button" class="btn btn-outline" onclick="setSettingsTargetType('assistant')">Assistant settings</button>

@@ -15,9 +15,9 @@ function renderSidebar() {
   ];
   const nav = document.getElementById('sidebar-nav');
   if (!nav) return;
-  const subtitle = document.getElementById('sidebar-subtitle');
-  if (subtitle) subtitle.textContent = isAssistant ? 'Assistant Portal' : 'Supervisor Portal';
-  document.title = isAssistant ? 'IT Assistant Dashboard' : 'IT Supervisor Dashboard';
+  document.title = isAssistant
+    ? 'QUIMS Helpdesk | Assistant Dashboard'
+    : 'QUIMS Helpdesk | Supervisor Dashboard';
   if (isAssistant && state.activeTab === 'team') state.activeTab = 'dashboard';
   nav.innerHTML = navItems.map(item => {
     const unread = item.id === 'notifications' ? state.notifications.filter(n => !n.read).length : 0;

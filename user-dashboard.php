@@ -1,24 +1,22 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/api/helpers.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('Content-Type: text/html; charset=utf-8');
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 if (($_SESSION['user_type'] ?? '') !== 'general' || empty($_SESSION['user_id'])) {
-    header('Location: index.html');
+    header('Location: ' . appendTabSession('index.html'));
     exit;
 }
 
-$stmt = $pdo->prepare('SELECT full_name, email, phone, whatsapp, last_login, created_at, status, passkey_hash FROM general_users WHERE id = ? LIMIT 1');
+$stmt = $db->prepare('SELECT full_name, email, phone, whatsapp, last_login, created_at, status, passkey_hash FROM general_users WHERE id = ? LIMIT 1');
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 if (!$user) {
     session_destroy();
-    header('Location: index.html');
+    header('Location: ' . appendTabSession('index.html'));
     exit;
 }
 
@@ -31,11 +29,14 @@ function e($value) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IECMS User Portal</title>
+  <title>QUIMS Helpdesk | User Dashboard</title>
   <style>
     :root { font-family: Inter, system-ui, sans-serif; color: #102a43; background: #f4f7f6; }
     body { margin: 0; min-height: 100vh; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 6vw; background: #064e3b; color: white; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; background: white; }
+    .brand strong { font-size: 1.1rem; }
     main { width: min(880px, 90vw); margin: 42px auto; }
     section { background: white; border: 1px solid #d7e2de; border-radius: 12px; padding: 24px; box-shadow: 0 8px 24px rgba(6, 78, 59, .08); }
     h1, h2 { margin-top: 0; }
@@ -53,7 +54,7 @@ function e($value) {
 </head>
 <body>
   <header>
-    <div><strong>IECMS</strong><div>User Portal</div></div>
+    <div class="brand"><img src="system logo (2).webp" alt="QUIMS Helpdesk logo"><strong>QUIMS Helpdesk</strong></div>
     <button id="logout" type="button">Sign out</button>
   </header>
   <main>
@@ -78,6 +79,7 @@ function e($value) {
       </form>
     </section>
   </main>
+  <script src="tab-session.js"></script>
   <script>
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
@@ -96,6 +98,7 @@ function e($value) {
       try {
         await fetch('api/logout.php', { method: 'POST', credentials: 'include', cache: 'no-store' });
       } finally {
+        window.IECMSTabSession.clear();
         window.location.replace('index.html');
       }
     });

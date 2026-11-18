@@ -1,6 +1,25 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
+function requestGeminiGeneration($model, $apiKey, $payload) {
+    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/'
+        . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
+    $curl = curl_init($endpoint);
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30
+    ]);
+    $body = curl_exec($curl);
+    $error = curl_error($curl);
+    $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+
+    return ['body' => $body, 'error' => $error, 'status' => $status];
+}
+
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $action = $_GET['action'] ?? '';
 $isGenerateRequest = $_SERVER['REQUEST_METHOD'] === 'POST'
@@ -11,8 +30,6 @@ if ($isGenerateRequest) {
     requireAdminOrSupervisor();
 }
 
-// Minimal Gemini/AI endpoint stub. For production, replace this with
-// an integration to the AI service (OpenAI, Google Gemini, etc.).
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (strpos($path, '/generate') !== false || $action === 'generate') {
         $data = json_decode(file_get_contents('php://input'), true) ?: [];
@@ -37,12 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $model = getenv('GEMINI_MODEL') ?: ($_ENV['GEMINI_MODEL'] ?? 'gemini-2.5-flash');
+        $model = getenv('GEMINI_MODEL') ?: ($_ENV['GEMINI_MODEL'] ?? 'gemini-3.5-flash-lite');
         $model = preg_replace('/^models\//', '', trim($model));
         if (!$model) {
-            $model = 'gemini-2.5-flash';
+            $model = 'gemini-3.5-flash-lite';
         }
-        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
         $fullPrompt = "Answer the user's request completely and directly. Include all necessary explanation and actionable steps. Do not impose an arbitrary line limit, omit important details, or stop mid-sentence. Use headings or alternatives only when they help answer the request.\n\nUser request:\n" . trim($prompt);
         $payload = json_encode([
             'contents' => [[
@@ -54,18 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]
         ]);
 
-        $curl = curl_init($endpoint);
-        curl_setopt_array($curl, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30
-        ]);
-        $responseBody = curl_exec($curl);
-        $curlError = curl_error($curl);
-        $httpStatus = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
+        $result = requestGeminiGeneration($model, $apiKey, $payload);
+        $responseBody = $result['body'];
+        $curlError = $result['error'];
+        $httpStatus = $result['status'];
 
         if ($responseBody === false || $curlError) {
             http_response_code(502);
@@ -74,9 +82,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $response = json_decode($responseBody, true);
+        $providerMessage = (string)($response['error']['message'] ?? '');
+        $isTemporaryOverload = in_array($httpStatus, [429, 503], true)
+            && preg_match('/high demand|overload|temporarily unavailable|try again later/i', $providerMessage);
+        $fallbackModel = 'gemini-3.5-flash-lite';
+        if ($isTemporaryOverload && $model !== $fallbackModel) {
+            $fallbackResult = requestGeminiGeneration($fallbackModel, $apiKey, $payload);
+            if ($fallbackResult['body'] === false || $fallbackResult['error']) {
+                http_response_code(502);
+                echo json_encode(['error' => 'Gemini is temporarily busy. Please try again shortly.']);
+                exit;
+            }
+            $result = $fallbackResult;
+            $responseBody = $result['body'];
+            $httpStatus = $result['status'];
+            $model = $fallbackModel;
+            $response = json_decode($responseBody, true);
+            $providerMessage = (string)($response['error']['message'] ?? '');
+        }
+
         if ($httpStatus < 200 || $httpStatus >= 300) {
+            if (in_array($httpStatus, [429, 503], true)
+                && preg_match('/high demand|overload|temporarily unavailable|try again later/i', $providerMessage)) {
+                http_response_code(503);
+                echo json_encode(['error' => 'Gemini is temporarily busy. Please try again shortly.']);
+                exit;
+            }
             http_response_code(502);
-            echo json_encode(['error' => ($response['error']['message'] ?? 'Gemini request failed') . ' Model: ' . $model]);
+            echo json_encode(['error' => ($providerMessage ?: 'Gemini request failed') . ' Model: ' . $model]);
             exit;
         }
 

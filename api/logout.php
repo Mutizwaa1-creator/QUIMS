@@ -1,19 +1,14 @@
 <?php
-session_start();
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
-header('Pragma: no-cache');
-header('Expires: 0');
-
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/helpers.php';
 
 if (!empty($_SESSION['user_id'])) {
     try {
         $userTable = ($_SESSION['user_type'] ?? 'staff') === 'general' ? 'general_users' : 'users';
-        $stmt = $pdo->prepare("UPDATE {$userTable} SET last_logout = NOW() WHERE id = ?");
+        $stmt = $db->prepare("UPDATE {$userTable} SET last_logout = NOW() WHERE id = ?");
         $stmt->execute([$_SESSION['user_id']]);
 
         if ($userTable === 'users') {
-            $assistantStmt = $pdo->prepare(
+            $assistantStmt = $db->prepare(
                 'UPDATE assistants a
                  INNER JOIN users u ON LOWER(TRIM(u.email)) = LOWER(TRIM(a.email))
                  SET a.status = "offline"
@@ -27,6 +22,8 @@ if (!empty($_SESSION['user_id'])) {
 }
 
 $_SESSION = [];
+session_destroy();
+
 if (ini_get('session.use_cookies')) {
     $params = session_get_cookie_params();
     setcookie(
@@ -40,8 +37,5 @@ if (ini_get('session.use_cookies')) {
     );
 }
 
-session_destroy();
-
 http_response_code(200);
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode(['success' => true]);
+sendJson(['success' => true]);

@@ -4131,6 +4131,130 @@ button.status-badge[aria-pressed="true"] {
     transform: scale(1.1);
 }
 
+@media (max-width: 720px) {
+    .notif-page-header-content {
+        padding: 20px;
+        gap: 16px;
+    }
+
+    .notif-page-header-left {
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .notif-page-title {
+        font-size: clamp(1.25rem, 5vw, 1.5rem);
+        line-height: 1.2;
+    }
+
+    .notif-page-subtitle {
+        flex-wrap: wrap;
+        line-height: 1.4;
+    }
+
+    .notif-filters {
+        gap: 16px;
+    }
+
+    .notif-filter-card {
+        min-width: 0;
+        padding: 14px;
+    }
+
+    .notif-date-range {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .notif-date-input {
+        width: 0;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .notif-item-inner {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .notif-item-icon-wrap {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+    }
+
+    .notif-item-title-area {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .notif-item-title,
+    .notif-item-msg {
+        overflow-wrap: anywhere;
+    }
+
+    .notif-item-actions {
+        flex-shrink: 0;
+        opacity: 1;
+    }
+
+    .notif-item-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .notif-page-header-content {
+        padding: 18px 16px;
+    }
+
+    .notif-page-header-left {
+        gap: 10px;
+    }
+
+    .notif-page-icon-wrap {
+        padding: 9px;
+    }
+
+    .notif-filter-pill {
+        padding: 6px 12px;
+    }
+
+    .notif-item-inner {
+        padding: 14px 12px;
+        gap: 10px;
+    }
+
+    .notif-item-actions {
+        gap: 4px;
+    }
+
+    .notif-item-action-btn {
+        padding: 6px;
+    }
+
+    .notif-empty {
+        padding: 48px 16px;
+        text-align: center;
+    }
+
+    .notif-summary {
+        gap: 10px;
+    }
+
+    .notif-summary-card {
+        padding: 12px;
+        gap: 8px;
+    }
+
+    .notif-summary-label {
+        font-size: .8rem;
+    }
+}
+
 
 /* ===== PRINT PREVIEW ===== */
 

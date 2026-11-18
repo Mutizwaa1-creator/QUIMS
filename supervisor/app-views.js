@@ -110,11 +110,10 @@ function renderAssignments(container) {
         </div>`}
         <div style="display:flex;flex-wrap:wrap;gap:7px;border-top:1px solid var(--slate-100);padding-top:12px;">
           ${['Pending', 'In Progress', 'Resolved'].map(status => {
-            const ranks = { pending: 1, 'in progress': 2, resolved: 3 };
-            const currentRank = ranks[currentStatus.toLowerCase()] || 1;
-            const targetRank = ranks[status.toLowerCase()];
             const isCurrent = currentStatus.toLowerCase() === status.toLowerCase();
-            return `<button type="button" class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline'}" onclick="updateAssignmentStatus('${esc(t.id)}', '${status}')" ${isCurrent || targetRank < currentRank ? 'disabled' : ''}>${status}</button>`;
+            const ranks = { pending: 0, 'in progress': 1, resolved: 2 };
+            const isBackward = ranks[status.toLowerCase()] < ranks[currentStatus.toLowerCase()];
+            return `<button type="button" class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline'}" onclick="updateAssignmentStatus('${esc(t.id)}', '${status}')" ${isCurrent || isBackward ? 'disabled' : ''}>${status}</button>`;
           }).join('')}
         </div>
         ${isAssistant ? '' : `<div style="display:flex;gap:8px;">
@@ -178,35 +177,34 @@ async function updateAssignmentStatus(ticketId, status) {
   } catch (error) {
     addToast(error.message || 'Unable to update assignment status.', 'error');
   }
+}
 
-  async function reassignAssignment(ticketId) {
-    const ticket = state.tickets.find(item => String(item.id) === String(ticketId));
-    const target = document.getElementById(`assignment-target-${ticketId}`);
-    const assignee = target ? Number(target.value) : 0;
-    if (!ticket || !assignee || assignee === Number(ticket.assignee)) {
-      addToast('Choose a different assistant first.', 'error');
-      return;
-    }
-    try {
-      const response = await fetch('api/tickets.php', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: ticketId,
-          updates: {
-            assignee,
-            status: String(ticket.status).toLowerCase() === 'resolved' ? 'Resolved' : 'Pending',
-            assignedDate: new Date().toISOString().slice(0, 10)
-          }
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Unable to assign ticket');
-      await loadInitialData();
-      addToast('Assignment sent to the selected assistant.', 'success');
-    } catch (error) {
-      addToast(error.message || 'Unable to assign ticket.', 'error');
-    }
+async function reassignAssignment(ticketId) {
+  const ticket = state.tickets.find(item => String(item.id) === String(ticketId));
+  const target = document.getElementById(`assignment-target-${ticketId}`);
+  const assignee = target ? Number(target.value) : 0;
+  if (!ticket || !assignee || assignee === Number(ticket.assignee)) {
+    addToast('Choose a different assistant first.', 'error');
+    return;
+  }
+  try {
+    const response = await fetch('api/tickets.php', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: ticketId,
+        updates: {
+          assignee,
+          assignedDate: new Date().toISOString().slice(0, 10)
+        }
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Unable to assign ticket');
+    await loadInitialData();
+    addToast('Assignment sent to the selected assistant.', 'success');
+  } catch (error) {
+    addToast(error.message || 'Unable to assign ticket.', 'error');
   }
 }
 
@@ -241,9 +239,12 @@ async function generateAssignmentTicketAi() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.error) throw new Error(data.error || 'AI request failed');
-      result.textContent = data.text || 'No answer was returned.';
+      if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('AI returned an empty response.');
+      result.textContent = data.text.trim();
+      addToast('QUIMS response generated successfully.');
     } catch (error) {
-      result.textContent = error.message || 'Unable to generate an answer.';
+      console.error('Assignment AI response failed:', error);
+      result.textContent = 'Sorry, no QUIMS response was generated. Please try again.';
       addToast(result.textContent, 'error');
   }
 }
@@ -877,9 +878,9 @@ function renderRegister(container) {
               <i data-lucide="sparkles" style="width:18px;height:18px"></i>
             </button>
           </div>
-          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:var(--slate-50);white-space:pre-wrap">
+          <div id="reg-ai-suggestion" class="hidden" aria-live="polite" style="margin-top:8px;padding:12px;border:1px solid var(--slate-200);border-radius:8px;background:#fff;white-space:pre-wrap">
             <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
-              <img src="../background.jpg" alt="Judicial Service Commission logo" style="width:96px;height:96px;object-fit:contain">
+              <img src="../background.jpg" alt="Judicial Service Commission logo" style="display:block;width:96px;height:96px;object-fit:contain;border:0;outline:0;box-shadow:none;background:#fff">
               <strong>QUIMS HELPDESK</strong>
             </div>
             <div id="reg-ai-suggestion-text" class="ai-response-scroll" style="margin-top:6px"></div>
@@ -1096,20 +1097,20 @@ async function handleAIGenerate() {
       throw new Error(data.error);
     }
 
-    if (data.text) {
+    if (typeof data.text === 'string' && data.text.trim()) {
       if (markerIndex >= 0) desc.value = originalPrompt;
       const suggestion = document.getElementById('reg-ai-suggestion');
       const suggestionText = document.getElementById('reg-ai-suggestion-text');
       if (!suggestion || !suggestionText) throw new Error('AI suggestion area is unavailable.');
       suggestionText.textContent = data.text.trim();
       suggestion.classList.remove('hidden');
-      addToast('AI suggestion generated for reference; it is not included in the record.');
+      addToast('QUIMS response generated successfully.');
     } else {
       throw new Error("Empty response received from server");
     }
   } catch (error) {
     console.error('Gemini Generate Error:', error);
-    addToast(error.message || 'Could not fetch AI suggestion.', 'error');
+    addToast('Sorry, no QUIMS response was generated. Please try again.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="sparkles" style="width:18px;height:18px"></i>';
@@ -1153,9 +1154,12 @@ async function runAssignmentAi() {
     });
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || 'AI request failed');
-    result.textContent = data.text || 'No solution was returned.';
+    if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('AI returned an empty response.');
+    result.textContent = data.text.trim();
+    addToast('QUIMS response generated successfully.');
   } catch (error) {
-    result.textContent = error.message || 'Unable to search for a solution.';
+    console.error('Assignment AI search failed:', error);
+    result.textContent = 'Sorry, no QUIMS response was generated. Please try again.';
     addToast(result.textContent, 'error');
   }
 }
@@ -2302,27 +2306,28 @@ function openEditTicketModal(id) {
   }
   const t = state.tickets.find(x => x.id === id);
   if (!t) return;
+  const isResolved = String(t.status || '').toLowerCase() === 'resolved';
   const editStatuses = ['Pending', 'In Progress', 'Resolved'];
   const editStatus = editStatuses.includes(t.status) ? t.status : 'Pending';
   const body = `
     <form id="edit-form" onsubmit="handleEditTicketSubmit(event, '${id}')" class="space-y-4">
       <div class="form-grid-2">
         <div class="form-group"><label class="form-label">Assigned To</label>
-          <select class="form-select form-select-sm assignee-select" id="edit-assignee" size="1">
+          <select class="form-select form-select-sm assignee-select" id="edit-assignee" size="1" disabled>
             <option value="">-- Unassigned --</option>
             ${state.assistants.filter(a => String(a.role).toLowerCase() === 'assistant' && a.status !== 'disabled').map(a => `<option value="${a.id}" ${t.assignee === a.id ? 'selected' : ''}>${esc(a.name)} (Assistant)</option>`).join('')}
           </select>
         </div>
         <div class="form-group"><label class="form-label">Status</label>
-          <select class="form-select form-select-sm" id="edit-status">
+          <select class="form-select form-select-sm" id="edit-status" disabled>
           ${editStatuses.map(s => `<option value="${s}" ${editStatus === s ? 'selected' : ''}>${s}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2">${esc(t.description)}</textarea></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea form-input-sm" id="edit-desc" rows="2" ${isResolved ? 'disabled' : ''}>${esc(t.description)}</textarea></div>
       <div class="form-group"><label class="form-label">External Info</label><input class="form-input form-input-sm" id="edit-external" value="${esc(t.external || '')}"></div>
       <div class="form-grid-2">
-        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${t.resolvedDate || ''}"></div>
+        <div class="form-group"><label class="form-label">Resolved Date</label><input type="date" class="form-input form-input-sm" id="edit-resolved-date" value="${esc(String(t.resolvedDate || '').slice(0, 10))}"></div>
         <div class="form-group"><label class="form-label">Date Raised</label><input type="date" class="form-input form-input-sm" value="${t.date}" readonly style="background:var(--slate-100)"></div>
       </div>
     </form>
@@ -2335,13 +2340,13 @@ function openEditTicketModal(id) {
 
 async function handleEditTicketSubmit(e, id) {
   e.preventDefault();
+  const descriptionField = document.getElementById('edit-desc');
   const updates = {
-    assignee: document.getElementById('edit-assignee').value ? parseInt(document.getElementById('edit-assignee').value) : null,
-    status: document.getElementById('edit-status').value,
     description: document.getElementById('edit-desc').value,
     external: document.getElementById('edit-external').value || null,
     resolvedDate: document.getElementById('edit-resolved-date').value || null
   };
+  if (descriptionField.disabled) delete updates.description;
   await editTicket(id, updates);
   closeModal();
 }
@@ -2869,11 +2874,40 @@ function renderSettings(container) {
   }
 
   const isSupervisor = String(state.currentUserRole || '').toLowerCase() === 'supervisor';
+  const currentUser = state.currentUser || {};
+  const currentUserName = String(currentUser.full_name || currentUser.name || state.currentUserName || '').trim();
+  const normalizedCurrentUserName = currentUserName.toLowerCase();
+  const hasOwnPasskey = Boolean(normalizedCurrentUserName && (state.passkeys || []).some(passkey =>
+    String(passkey.full_name || '').trim().toLowerCase() === normalizedCurrentUserName
+  ));
+
   if (!state.settingsTargetType) {
     state.settingsTargetType = 'user';
   }
   if (state.settingsTargetType === 'user') {
-    renderGeneralUserNationalIdLookup(container, false);
+    renderGeneralUserNationalIdLookup(container, false, `
+      <section style="background:white;border:1px solid var(--slate-200);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;" aria-label="Biometric and passkey reset">
+        <div style="border-bottom:1px solid var(--slate-100);padding:18px 24px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="fingerprint" style="width:18px;height:18px;color:var(--slate-600)"></i>
+          <h3 style="font-size:1rem;font-weight:700;color:var(--slate-800);margin:0;">Biometric &amp; Passkey Reset</h3>
+        </div>
+        <div style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+          <p style="font-size:13px;color:var(--slate-500);margin:0;line-height:1.5;">Manage your signature passkey here. Your passkey is stored securely and cannot be displayed.</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--slate-50);border:1px solid var(--slate-200);border-radius:8px;padding:16px 20px;flex-wrap:wrap;gap:16px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <i data-lucide="key-round" style="width:20px;height:20px;color:var(--slate-600)"></i>
+              <div>
+                <div style="font-weight:700;font-size:13.5px;color:var(--slate-800);">Your signature passkey</div>
+                <div style="font-size:12px;color:var(--slate-500);margin-top:1px;">${!state.passkeysFetched ? 'Checking passkey status...' : (hasOwnPasskey ? 'Passkey is registered.' : 'No passkey is registered.')}</div>
+              </div>
+            </div>
+            ${state.passkeysFetched && !hasOwnPasskey
+              ? '<button type="button" onclick="openFTUModal()" class="btn btn-primary" style="display:flex;align-items:center;gap:8px;"><i data-lucide="key-round" style="width:16px;height:16px"></i> Create Passkey</button>'
+              : ''}
+          </div>
+        </div>
+      </section>
+    `);
     return;
   }
   
@@ -2905,6 +2939,11 @@ function renderSettings(container) {
       : (selectedItem.full_name || selectedItem.name || selectedItem.email || ''))
     : '';
   const currentEmail = selectedItem ? selectedItem.email : '';
+  const isCurrentAccount = Boolean(
+    currentUser.email
+    && selectedItem?.email
+    && String(currentUser.email).trim().toLowerCase() === String(selectedItem.email).trim().toLowerCase()
+  );
   const canManageSelectedAccount = !isSupervisor || state.settingsTargetType !== 'user';
 
   container.innerHTML = `
@@ -3052,9 +3091,13 @@ function renderSettings(container) {
                   <button onclick="submitPasskeyReset()" class="btn" style="background: var(--red-600); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
                     <i data-lucide="trash-2" style="width:16px;height:16px"></i> Reset Passkey
                   </button>
+                ` : (isCurrentAccount && state.passkeysFetched ? `
+                  <button type="button" onclick="openFTUModal()" class="btn btn-primary" style="display:flex;align-items:center;gap:8px;">
+                    <i data-lucide="key-round" style="width:16px;height:16px"></i> Create Passkey
+                  </button>
                 ` : `
                   <div role="alert" style="padding:10px 14px;border:1px solid var(--amber-200);border-radius:8px;background:var(--amber-50);color:var(--amber-800);font-size:13px;">No passkey is registered. Register a passkey first, then you can reset it here.</div>
-                `}
+                `)}
               </div>
             </div>
           </div>
@@ -3134,7 +3177,7 @@ function renderSettings(container) {
   `;
 }
 
-function renderGeneralUserNationalIdLookup(container, canReset) {
+function renderGeneralUserNationalIdLookup(container, canReset, ownPasskeyPanel = '') {
   const user = state.generalUserLookupResult;
   const fields = user ? [
     ['Account ID', user.id],
@@ -3160,6 +3203,7 @@ function renderGeneralUserNationalIdLookup(container, canReset) {
           <p class="notif-page-subtitle" style="font-size:.9rem;color:var(--slate-500);margin:0;">Verify the National ID to view the matching General User account.</p>
         </div></div>
       </div>
+      ${ownPasskeyPanel}
       <section style="background:white;border:1px solid var(--slate-200);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px;">
         <div style="display:flex;justify-content:flex-end;">
           <button type="button" class="btn btn-outline" onclick="setSettingsTargetType('assistant')">Assistant settings</button>

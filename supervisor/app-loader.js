@@ -85,6 +85,8 @@ window.selectAssistant = selectAssistant || (() => {});
 window.assignmentPanelHtml = assignmentPanelHtml || (() => '');
 window.renderAssignments = renderAssignments || (() => {});
 window.filterAssignmentsByStatus = filterAssignmentsByStatus || (() => {});
+window.updateAssignmentStatus = updateAssignmentStatus || (() => {});
+window.reassignAssignment = reassignAssignment || (() => {});
 window.openAssignmentTicketAiModal = openAssignmentTicketAiModal || (() => {});
 
 // View functions - Register (stub)
